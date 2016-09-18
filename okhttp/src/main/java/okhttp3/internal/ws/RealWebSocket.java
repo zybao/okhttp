@@ -70,6 +70,8 @@ public abstract class RealWebSocket implements WebSocket, FrameCallback {
   }
 
   @Override public final void onPing(final Buffer buffer) {
+    listener.onPing(buffer.clone());
+
     replyExecutor.execute(new NamedRunnable("OkHttp %s WebSocket Pong Reply", url) {
       @Override protected void execute() {
         peerPing(buffer);

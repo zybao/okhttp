@@ -176,6 +176,7 @@ public final class RealWebSocketTest {
   @Test public void pingWritesPong() throws IOException, InterruptedException {
     client.sendPing(new Buffer().writeUtf8("Hello!"));
     server.readMessage(); // Read the ping, write the pong.
+    serverListener.assertPing(new Buffer().writeUtf8("Hello!"));
     client.readMessage(); // Read the pong.
     clientListener.assertPong(new Buffer().writeUtf8("Hello!"));
   }

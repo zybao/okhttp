@@ -242,6 +242,10 @@ public final class WebSocketCallTest {
         listener.onMessage(message);
       }
 
+      @Override public void onPing(Buffer payload) {
+        listener.onPing(payload);
+      }
+
       @Override public void onPong(Buffer payload) {
         listener.onPong(payload);
       }
@@ -273,6 +277,9 @@ public final class WebSocketCallTest {
     }
 
     @Override public void onMessage(ResponseBody message) throws IOException {
+    }
+
+    @Override public void onPing(Buffer payload) {
     }
 
     @Override public void onPong(Buffer payload) {

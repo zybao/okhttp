@@ -52,6 +52,12 @@ public interface WebSocketListener {
   void onMessage(ResponseBody message) throws IOException;
 
   /**
+   * Called when a server ping is received. The resulting pong will not be sent until this callback
+   * completes.
+   */
+  void onPing(Buffer payload);
+
+  /**
    * Called when a server pong is received. This is usually a result of calling {@link
    * WebSocket#sendPing(Buffer)} but might also be unsolicited.
    */
