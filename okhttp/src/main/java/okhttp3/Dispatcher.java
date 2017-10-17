@@ -124,6 +124,9 @@ public final class Dispatcher {
     this.idleCallback = idleCallback;
   }
 
+  // 如果正在运行的异步请求的数量小于maxRequests并且与该请求相同的主机数量小于maxRequestsPerHost，
+  // 也就是说符合放入runningAsyncCalls队列的要求，那么放入队列，然后将AsyncCall交给线程池；
+  // 如果不符合，那么就放入到readyAsyncCalls队列中。
   synchronized void enqueue(AsyncCall call) {
     if (runningAsyncCalls.size() < maxRequests && runningCallsForHost(call) < maxRequestsPerHost) {
       runningAsyncCalls.add(call);
@@ -197,11 +200,15 @@ public final class Dispatcher {
     Runnable idleCallback;
     synchronized (this) {
       if (!calls.remove(call)) throw new AssertionError("Call wasn't in-flight!");
+      // 异步的时候请求
       if (promoteCalls) promoteCalls();
+      // 统计目前还在运行的请求
       runningCallsCount = runningCallsCount();
       idleCallback = this.idleCallback;
     }
 
+    // 如果正在运行的请求数为0表示Dispatcher中没有可运行的请求了，
+    // 进入Idle状态，此时如果idleCallback不为null，则调用其run方法。
     if (runningCallsCount == 0 && idleCallback != null) {
       idleCallback.run();
     }

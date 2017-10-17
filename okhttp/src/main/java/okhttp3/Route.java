@@ -15,6 +15,8 @@
  */
 package okhttp3;
 
+import okhttp3.internal.Util;
+
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import javax.annotation.Nullable;

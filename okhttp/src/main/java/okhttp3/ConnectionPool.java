@@ -54,8 +54,13 @@ public final class ConnectionPool {
   /** The maximum number of idle connections for each address. */
   private final int maxIdleConnections;
   private final long keepAliveDurationNs;
+
+  // Socket清理的Runnable，每当put操作时，就会被主动调用
+  // 注意put操作是在网络线程
+  // 而Socket清理是在`OkHttp ConnectionPool`线程池中调用
   private final Runnable cleanupRunnable = new Runnable() {
     @Override public void run() {
+      // 执行清理并返回下场需要清理的时间
       while (true) {
         long waitNanos = cleanup(System.nanoTime());
         if (waitNanos == -1) return;
@@ -64,6 +69,7 @@ public final class ConnectionPool {
           waitNanos -= (waitMillis * 1000000L);
           synchronized (ConnectionPool.this) {
             try {
+              // 在timeout内释放锁与时间片
               ConnectionPool.this.wait(waitMillis, (int) waitNanos);
             } catch (InterruptedException ignored) {
             }
@@ -196,6 +202,7 @@ public final class ConnectionPool {
    * <p>Returns the duration in nanos to sleep until the next scheduled call to this method. Returns
    * -1 if no further cleanups are required.
    */
+  // cleanup使用了类似于GC的标记-清除算法，也就是首先标记出最不活跃的连接(我们可以叫做泄漏连接，或者空闲连接)，接着进行清除
   long cleanup(long now) {
     int inUseConnectionCount = 0;
     int idleConnectionCount = 0;
@@ -203,8 +210,10 @@ public final class ConnectionPool {
     long longestIdleDurationNs = Long.MIN_VALUE;
 
     // Find either a connection to evict, or the time that the next eviction is due.
+    // 遍历`Deque`中所有的`RealConnection`，标记泄漏的连接
     synchronized (this) {
       for (Iterator<RealConnection> i = connections.iterator(); i.hasNext(); ) {
+        // 查询此连接内部StreamAllocation的引用数量
         RealConnection connection = i.next();
 
         // If the connection is in use, keep searching.
@@ -216,6 +225,7 @@ public final class ConnectionPool {
         idleConnectionCount++;
 
         // If the connection is ready to be evicted, we're done.
+        // 选择排序法，标记出空闲连接
         long idleDurationNs = now - connection.idleAtNanos;
         if (idleDurationNs > longestIdleDurationNs) {
           longestIdleDurationNs = idleDurationNs;
@@ -227,20 +237,28 @@ public final class ConnectionPool {
           || idleConnectionCount > this.maxIdleConnections) {
         // We've found a connection to evict. Remove it from the list, then close it below (outside
         // of the synchronized block).
+        // 如果(`空闲socket连接超过5个`
+        // 且`keepalive时间大于5分钟`)
+        // 就将此泄漏连接从`Deque`中移除
         connections.remove(longestIdleConnection);
       } else if (idleConnectionCount > 0) {
         // A connection will be ready to evict soon.
+        // 返回此连接即将到期的时间，供下次清理
+        // 这里依据是在上文`connectionBecameIdle`中设定的计时
         return keepAliveDurationNs - longestIdleDurationNs;
       } else if (inUseConnectionCount > 0) {
         // All connections are in use. It'll be at least the keep alive duration 'til we run again.
+        // 全部都是活跃的连接，5分钟后再次清理
         return keepAliveDurationNs;
       } else {
         // No connections, idle or in use.
+        // 没有任何连接，跳出循环
         cleanupRunning = false;
         return -1;
       }
     }
-
+    
+    //关闭连接，返回`0`，也就是立刻再次清理
     closeQuietly(longestIdleConnection.socket());
 
     // Cleanup again immediately.

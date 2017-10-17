@@ -184,13 +184,24 @@ final class RealCall implements Call {
     // Build a full stack of interceptors.
     List<Interceptor> interceptors = new ArrayList<>();
     interceptors.addAll(client.interceptors());
+    // RetryAndFollowUpInterceptor：默认情况下位于OkHttp3加工链的首位，
+    // 顾名思义，具有失败-重试机制，支持页面重定向和一些407之类的代理验证等，此外负责StreamAllocation对象的创建;
     interceptors.add(retryAndFollowUpInterceptor);
+    // BridgeInterceptor：桥拦截器，配置Request的Headers头信息：读取Cookie，默认启用Gzip，
+    // 默认加入Keep-Alive长连接，如果不想让OkHttp3擅自使用长连接，只需在Request的Header中预设Connection字段即可;
     interceptors.add(new BridgeInterceptor(client.cookieJar()));
+    // CacheInterceptor: 管理OkHttp3的缓存，目前仅支持GET类型的缓存，
+    // 使用文件形式的Lru缓存管理策略，CacheStrategy类负责了缓存相关的策略管理;
     interceptors.add(new CacheInterceptor(client.internalCache()));
+    // ConnectInterceptor：OkHttp3打开一个Socket连接的地方，OkHttp3相关的Router路由切换策略也可以从这里开始跟踪;
     interceptors.add(new ConnectInterceptor(client));
     if (!forWebSocket) {
+      // 拦截非WebSocket的情况下产生真正网络访问的请求。因此在这里上做网络上传和下载进度的监听器是比较合适的。
+      // addNetworkInterceptor()
       interceptors.addAll(client.networkInterceptors());
     }
+    // CallServerInterceptor：处于OkHttp3加工链的末尾，
+    // 通过HttpStream往Socket中写入Request报文信息，并回读Response报文信息.
     interceptors.add(new CallServerInterceptor(forWebSocket));
 
     Interceptor.Chain chain = new RealInterceptorChain(interceptors, null, null, null, 0,
